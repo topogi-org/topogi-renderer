@@ -1,0 +1,8 @@
+[package]
+name = "topogi-renderer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratatui = "0.27.0"
+topogi-lang = { git = "https://github.com/topogi-org/topogi-lang.git", branch = "main" }
