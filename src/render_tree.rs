@@ -4,6 +4,25 @@ use topogi_lang::ast::Exp;
 type Result<T> = std::result::Result<T, RenderTreeError>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RenderLayer {
+    trees: Vec<RenderTree>,
+}
+
+impl RenderLayer {
+    pub fn new() -> Self {
+        RenderLayer { trees: Vec::new() }
+    }
+
+    pub fn add_layer(&mut self, tree: RenderTree) {
+        self.trees.push(tree);
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<RenderTree> {
+        self.trees.iter()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RenderTree {
     // (text)
     Text(String),
@@ -169,6 +188,24 @@ pub fn create_render_tree(exp: &Exp) -> Result<RenderTree> {
         .or_else(|_| create_text(exp))
 }
 
+pub fn create_render_layer(exp: &Exp) -> Result<RenderLayer> {
+    let elems = exp
+        .as_list()
+        .ok_or(RenderTreeError::ExpectedList(exp.clone()))?;
+
+    if elems[0].as_symbol() != Some("layer") {
+        return Err(RenderTreeError::ExpectedSymbol("layer", exp.clone()));
+    }
+
+    let trees = elems
+        .iter()
+        .skip(1)
+        .map(|e| create_render_tree(e))
+        .collect::<Result<_>>()?;
+
+    Ok(RenderLayer { trees })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +301,39 @@ mod tests {
                     )
                 ]
             ))
+        )
+    }
+
+    #[test]
+    fn test_layer() {
+        let exp = parse(
+            r#"(layer
+                    (block "title1" "content1")
+                    (stack horizontal
+                        ((length 3) (block "title2" "content2"))
+                    )
+               )"#,
+        );
+        assert_eq!(
+            create_render_layer(&exp),
+            Ok(RenderLayer {
+                trees: vec![
+                    RenderTree::Block(
+                        "title1".to_string(),
+                        Box::new(RenderTree::Text("content1".to_string()))
+                    ),
+                    RenderTree::Stack(
+                        Direction::Horizontal,
+                        vec![StackElement::new(
+                            Constraint::Length(3),
+                            RenderTree::Block(
+                                "title2".to_string(),
+                                Box::new(RenderTree::Text("content2".to_string()))
+                            )
+                        ),]
+                    )
+                ]
+            })
         )
     }
 }

@@ -12,21 +12,17 @@ use ratatui::{
     widgets::{Block, Paragraph},
     Frame, Terminal,
 };
-use render_tree::{create_render_tree, RenderTree};
+use render_tree::{create_render_layer, create_render_tree, RenderLayer, RenderTree};
 use topogi_lang::ast::Exp;
 
 #[derive(Debug)]
 pub struct UIEngine {
-    terminal: Terminal<CrosstermBackend<Stdout>>,
+    pub terminal: Terminal<CrosstermBackend<Stdout>>,
 }
 
 #[derive(Debug)]
 pub enum RenderError {
-    InvalidBlock(Exp),
-    InvalidStack(Exp),
-    InvalidExp(Exp),
-    NotConstraint(Exp),
-    InvalidDirection(String),
+    RenderTreeError(render_tree::RenderTreeError),
     IO(std::io::Error),
 }
 
@@ -47,11 +43,20 @@ impl UIEngine {
         Ok(UIEngine { terminal })
     }
 
+    pub fn render_layer(&mut self, exp: &Exp) -> Result<()> {
+        let layer = create_render_layer(exp).map_err(RenderError::RenderTreeError)?;
+        self.terminal.draw(|frame| {
+            let area = frame.size();
+            render_layer(&layer, frame, area);
+        })?;
+        Ok(())
+    }
+
     pub fn render(&mut self, exp: &Exp) -> Result<()> {
         self.terminal.draw(|frame| {
             let area = frame.size();
             match create_render_tree(exp) {
-                Ok(render_tree) => render(&render_tree, frame, area),
+                Ok(tree) => render_tree(&tree, frame, area),
                 Err(err) => {
                     let error = format!("Error: {:?}", err);
                     frame.render_widget(Paragraph::new(error).block(Block::bordered()), area)
@@ -69,12 +74,12 @@ impl UIEngine {
     }
 }
 
-fn render(render_tree: &RenderTree, frame: &mut Frame, area: Rect) {
-    match render_tree {
+fn render_tree(tree: &RenderTree, frame: &mut Frame, area: Rect) {
+    match tree {
         RenderTree::Text(text) => frame.render_widget(Paragraph::new(text.clone()), area),
         RenderTree::Block(title, body) => {
             let block = Block::bordered().title(title.clone());
-            render(body, frame, block.inner(area));
+            render_tree(body, frame, block.inner(area));
             frame.render_widget(block, area);
         }
         RenderTree::Stack(direction, stack_elems) => {
@@ -85,8 +90,14 @@ fn render(render_tree: &RenderTree, frame: &mut Frame, area: Rect) {
                 .split(area);
 
             for (content, area) in stack_elems.iter().zip(layout.iter()) {
-                render(&content.content, frame, *area);
+                render_tree(&content.content, frame, *area);
             }
         }
+    }
+}
+
+fn render_layer(layer: &RenderLayer, frame: &mut Frame, area: Rect) {
+    for tree in layer.iter() {
+        render_tree(tree, frame, area);
     }
 }
