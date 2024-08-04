@@ -39,11 +39,7 @@ pub enum RenderTreeError {
 }
 
 fn create_text(exp: &Exp) -> Result<RenderTree> {
-    let str = exp
-        .as_string()
-        .ok_or(RenderTreeError::ExpectedString(exp.clone()))?;
-
-    Ok(RenderTree::Text(str.to_string()))
+    Ok(RenderTree::Text(exp.to_string()))
 }
 
 fn create_block(exp: &Exp) -> Result<RenderTree> {
@@ -59,9 +55,7 @@ fn create_block(exp: &Exp) -> Result<RenderTree> {
         return Err(RenderTreeError::ExpectedSymbol("block", exp.clone()));
     }
 
-    let title = elems[1]
-        .as_string()
-        .ok_or(RenderTreeError::ExpectedString(exp.clone()))?;
+    let title = elems[1].to_string();
 
     let content = &elems[2];
 
