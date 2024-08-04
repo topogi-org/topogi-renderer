@@ -65,6 +65,11 @@ fn create_block(exp: &Exp) -> Result<RenderTree> {
     ))
 }
 
+fn create_integer(exp: &Exp) -> Result<i64> {
+    exp.as_integer()
+        .ok_or(RenderTreeError::ExpectInteger(exp.clone()))
+}
+
 fn create_constraint(exp: &Exp) -> Result<Constraint> {
     let elems = exp
         .as_list()
@@ -74,16 +79,37 @@ fn create_constraint(exp: &Exp) -> Result<Constraint> {
         return Err(RenderTreeError::ExpectedList(exp.clone()));
     }
 
-    let _ = elems[0].as_symbol().ok_or(RenderTreeError::ExpectedSymbol(
+    let kind = elems[0].as_symbol().ok_or(RenderTreeError::ExpectedSymbol(
         "constraint kind",
         exp.clone(),
     ))?;
 
-    let length = elems[1]
-        .as_integer()
-        .ok_or(RenderTreeError::ExpectInteger(exp.clone()))?;
-
-    Ok(Constraint::Length(length as u16))
+    match kind {
+        "length" => {
+            let value = create_integer(&elems[1])?;
+            Ok(Constraint::Length(value as u16))
+        }
+        "min" => {
+            let value = create_integer(&elems[1])?;
+            Ok(Constraint::Min(value as u16))
+        }
+        "max" => {
+            let value = create_integer(&elems[1])?;
+            Ok(Constraint::Max(value as u16))
+        }
+        "percentage" => {
+            let value = create_integer(&elems[1])?;
+            Ok(Constraint::Percentage(value as u16))
+        }
+        "fill" => {
+            let value = create_integer(&elems[1])?;
+            Ok(Constraint::Fill(value as u16))
+        }
+        _ => Err(RenderTreeError::ExpectedSymbol(
+            "constraint kind",
+            exp.clone(),
+        )),
+    }
 }
 
 fn create_stack_element(exp: &Exp) -> Result<StackElement> {
