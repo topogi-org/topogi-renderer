@@ -28,12 +28,8 @@ fn _render(frame: &mut Frame) {
 fn main() -> Result<()> {
     let mut ui = UIEngine::new().unwrap();
     let source = r#"
-        (layer
-            (block "title1" "content1")
-            (stack vertical
-                ((length 3) (block "title2" "content2"))
-                ((length 3) (block "title3" "content3")))
-            (block "title4" "content4"))
+    (layer
+        (block "Json Editor" "content" (style (border all))))
     "#;
     let mut parser = topogi_lang::parser::Parser::new(source);
     let exp = parser.parse_exp().unwrap();

@@ -2,7 +2,10 @@ use crate::render_tree::{
     check_symbol, create_list_with_len, create_list_with_minlen, create_render_tree, RenderTree,
     RenderTreeError, Result,
 };
-use ratatui::{layout::Alignment, widgets::Block};
+use ratatui::{
+    layout::Alignment,
+    widgets::{Block, Borders},
+};
 use topogi_lang::ast::Exp;
 
 pub fn create_block(exp: &Exp) -> Result<RenderTree> {
@@ -26,6 +29,10 @@ pub fn block_style<'a>(mut block: Block<'a>, exp: &Exp) -> Result<Block<'a>> {
         if let Ok(align) = title_align(style) {
             block = block.title_alignment(align);
         }
+
+        if let Ok(borders) = borders(style) {
+            block = block.borders(borders);
+        }
     }
 
     Ok(block)
@@ -33,7 +40,7 @@ pub fn block_style<'a>(mut block: Block<'a>, exp: &Exp) -> Result<Block<'a>> {
 
 fn title_align(exp: &Exp) -> Result<Alignment> {
     let elems = create_list_with_len(exp, 2)?;
-    check_symbol(&elems[0], "title_align")?;
+    check_symbol(&elems[0], "title-align")?;
 
     match elems[1].as_symbol() {
         Some("center") => Ok(Alignment::Center),
@@ -41,6 +48,24 @@ fn title_align(exp: &Exp) -> Result<Alignment> {
         Some("right") => Ok(Alignment::Right),
         _ => Err(RenderTreeError::ExpectedSymbol(
             "center | left | right",
+            exp.clone(),
+        )),
+    }
+}
+
+fn borders(exp: &Exp) -> Result<Borders> {
+    let elems = create_list_with_len(exp, 2)?;
+    check_symbol(&elems[0], "border")?;
+
+    match elems[1].as_symbol() {
+        Some("none") => Ok(Borders::NONE),
+        Some("left") => Ok(Borders::LEFT),
+        Some("right") => Ok(Borders::RIGHT),
+        Some("top") => Ok(Borders::TOP),
+        Some("bottom") => Ok(Borders::BOTTOM),
+        Some("all") => Ok(Borders::ALL),
+        _ => Err(RenderTreeError::ExpectedSymbol(
+            "none | left | right | top | bottom | all",
             exp.clone(),
         )),
     }
