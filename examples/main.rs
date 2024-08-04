@@ -24,25 +24,22 @@ fn _render(frame: &mut Frame) {
     frame.render_widget(block.clone(), area);
     frame.render_widget(text, block.inner(area));
 }
-// (block "title" "content"
-//   (style
-//     (title_align center)
-//     (title_color (#00ffff #000000))
-//     (borders all)))
 
 fn main() -> Result<()> {
     let mut ui = UIEngine::new().unwrap();
     let source = r#"
         (layer
             (block "title1" "content1")
-            (block "title2" "content2"))
+            (stack vertical
+                ((length 3) (block "title2" "content2"))
+                ((length 3) (block "title3" "content3")))
+            (block "title4" "content4"))
     "#;
     let mut parser = topogi_lang::parser::Parser::new(source);
     let exp = parser.parse_exp().unwrap();
 
     loop {
-        ui.render_layer(&exp).unwrap();
-        _render(&mut ui.terminal.get_frame());
+        ui.render(&exp).unwrap();
 
         if event::poll(std::time::Duration::from_millis(16))? {
             if let event::Event::Key(key) = event::read()? {
