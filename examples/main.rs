@@ -1,5 +1,6 @@
 use ratatui::crossterm::event::{self, KeyCode, KeyEventKind};
 use ratatui::text::Text;
+use ratatui::widgets::Block;
 use ratatui::{layout::*, Frame};
 use topogi_renderer::Result;
 use topogi_renderer::UIEngine;
@@ -14,13 +15,20 @@ fn _center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
 
 fn _render(frame: &mut Frame) {
     let text = Text::raw("Hello world!");
+    let block = Block::bordered();
     let area = _center(
         frame.size(),
-        Constraint::Length(text.width() as u16),
-        Constraint::Length(1),
+        Constraint::Length(text.width() as u16 + 2),
+        Constraint::Length(3),
     );
-    frame.render_widget(text, area);
+    frame.render_widget(block.clone(), area);
+    frame.render_widget(text, block.inner(area));
 }
+// (block "title" "content"
+//   (style
+//     (title_align center)
+//     (title_color (#00ffff #000000))
+//     (borders all)))
 
 fn main() -> Result<()> {
     let mut ui = UIEngine::new().unwrap();
@@ -34,6 +42,7 @@ fn main() -> Result<()> {
 
     loop {
         ui.render_layer(&exp).unwrap();
+        _render(&mut ui.terminal.get_frame());
 
         if event::poll(std::time::Duration::from_millis(16))? {
             if let event::Event::Key(key) = event::read()? {

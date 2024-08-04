@@ -9,6 +9,7 @@ use ratatui::{
         ExecutableCommand,
     },
     layout::{Layout, Rect},
+    text::Text,
     widgets::{Block, Paragraph},
     Frame, Terminal,
 };
@@ -76,10 +77,10 @@ impl UIEngine {
 
 fn render_tree(tree: &RenderTree, frame: &mut Frame, area: Rect) {
     match tree {
-        RenderTree::Text(text) => frame.render_widget(Paragraph::new(text.clone()), area),
-        RenderTree::Block(title, body) => {
+        RenderTree::Text(text) => frame.render_widget(Text::raw(text.clone()), area),
+        RenderTree::Block(render_tree::Block { title, content, .. }) => {
             let block = Block::bordered().title(title.clone());
-            render_tree(body, frame, block.inner(area));
+            render_tree(content, frame, block.inner(area));
             frame.render_widget(block, area);
         }
         RenderTree::Stack(direction, stack_elems) => {

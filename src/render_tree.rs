@@ -1,4 +1,4 @@
-use ratatui::layout::{Constraint, Direction};
+use ratatui::layout::{Alignment, Constraint, Direction};
 use topogi_lang::ast::Exp;
 
 type Result<T> = std::result::Result<T, RenderTreeError>;
@@ -26,10 +26,105 @@ impl RenderLayer {
 pub enum RenderTree {
     // (text)
     Text(String),
-    // (block title content)
-    Block(String, Box<RenderTree>),
+    Block(Block),
     // (stack direction (constraint content)*)
     Stack(Direction, Vec<StackElement>),
+}
+
+impl RenderTree {
+    pub fn block(title: String, content: RenderTree) -> Self {
+        RenderTree::Block(Block::new(title, content))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Block {
+    pub title: String,
+    pub content: Box<RenderTree>,
+    pub style: BlockStyle,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
+pub struct BlockStyle {
+    pub title_align: Alignment,
+}
+
+impl BlockStyle {
+    pub fn from_exp(exp: &Exp) -> Result<Self> {
+        let mut block_style = BlockStyle::default();
+        let elems = exp
+            .as_list()
+            .ok_or(RenderTreeError::ExpectedList(exp.clone()))?;
+
+        if elems.len() < 2 {
+            return Err(RenderTreeError::InvalidLength(exp.clone()));
+        }
+
+        if elems[0].as_symbol() != Some("style") {
+            return Err(RenderTreeError::ExpectedSymbol("style", exp.clone()));
+        }
+
+        for style in elems.iter().skip(1) {
+            if let Ok(align) = BlockStyle::title_align(style) {
+                block_style.title_align = align;
+            }
+        }
+
+        Ok(block_style)
+    }
+
+    fn title_align(exp: &Exp) -> Result<Alignment> {
+        let elems = exp
+            .as_list()
+            .ok_or(RenderTreeError::ExpectedList(exp.clone()))?;
+        if elems.len() != 2 {
+            return Err(RenderTreeError::InvalidLength(exp.clone()));
+        }
+        if elems[0].as_symbol() != Some("title_align") {
+            return Err(RenderTreeError::ExpectedSymbol("title_align", exp.clone()));
+        }
+
+        match elems[1].as_symbol() {
+            Some("center") => Ok(Alignment::Center),
+            Some("left") => Ok(Alignment::Left),
+            Some("right") => Ok(Alignment::Right),
+            _ => Err(RenderTreeError::ExpectedSymbol(
+                "center | left | right",
+                exp.clone(),
+            )),
+        }
+    }
+}
+
+impl Block {
+    pub fn new(title: String, content: RenderTree) -> Self {
+        Block {
+            title,
+            content: Box::new(content),
+            style: BlockStyle::default(),
+        }
+    }
+
+    pub fn from_exp(exp: &Exp) -> Result<Self> {
+        let elems = exp
+            .as_list()
+            .ok_or(RenderTreeError::ExpectedList(exp.clone()))?;
+
+        if elems.len() < 3 {
+            return Err(RenderTreeError::InvalidLength(exp.clone()));
+        }
+
+        if elems[0].as_symbol() != Some("block") {
+            return Err(RenderTreeError::ExpectedSymbol("block", exp.clone()));
+        }
+
+        let mut block = Block::new(elems[1].to_string(), create_render_tree(&elems[2])?);
+        if let Some(style) = elems.get(3) {
+            block.style = BlockStyle::from_exp(style)?;
+        }
+
+        Ok(block)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -59,29 +154,6 @@ pub enum RenderTreeError {
 
 fn create_text(exp: &Exp) -> Result<RenderTree> {
     Ok(RenderTree::Text(exp.to_string()))
-}
-
-fn create_block(exp: &Exp) -> Result<RenderTree> {
-    let elems = exp
-        .as_list()
-        .ok_or(RenderTreeError::ExpectedList(exp.clone()))?;
-
-    if elems.len() != 3 {
-        return Err(RenderTreeError::InvalidLength(exp.clone()));
-    }
-
-    if elems[0].as_symbol() != Some("block") {
-        return Err(RenderTreeError::ExpectedSymbol("block", exp.clone()));
-    }
-
-    let title = elems[1].to_string();
-
-    let content = &elems[2];
-
-    Ok(RenderTree::Block(
-        title.to_string(),
-        Box::new(create_render_tree(content)?),
-    ))
 }
 
 fn create_integer(exp: &Exp) -> Result<i64> {
@@ -183,7 +255,8 @@ fn create_stack(exp: &Exp) -> Result<RenderTree> {
 }
 
 pub fn create_render_tree(exp: &Exp) -> Result<RenderTree> {
-    create_block(exp)
+    Block::from_exp(exp)
+        .map(|block| RenderTree::Block(block))
         .or_else(|_| create_stack(exp))
         .or_else(|_| create_text(exp))
 }
@@ -228,11 +301,24 @@ mod tests {
     fn test_create_block() {
         let exp = parse(r#"(block "title" "content")"#);
         assert_eq!(
-            create_render_tree(&exp),
-            Ok(RenderTree::Block(
-                "title".to_string(),
-                Box::new(RenderTree::Text("content".to_string()))
-            ))
+            Block::from_exp(&exp),
+            Ok(Block {
+                title: "title".to_string(),
+                content: Box::new(RenderTree::Text("content".to_string())),
+                style: BlockStyle::default()
+            })
+        );
+
+        let exp = parse(r#"(block title context (style (title_align center)))"#);
+        assert_eq!(
+            Block::from_exp(&exp),
+            Ok(Block {
+                title: "title".to_string(),
+                content: Box::new(RenderTree::Text("context".to_string())),
+                style: BlockStyle {
+                    title_align: Alignment::Center
+                }
+            })
         );
     }
 
@@ -241,12 +327,12 @@ mod tests {
         let exp = parse(r#"(block "title" (block "title2" "content"))"#);
         assert_eq!(
             create_render_tree(&exp),
-            Ok(RenderTree::Block(
+            Ok(RenderTree::block(
                 "title".to_string(),
-                Box::new(RenderTree::Block(
+                RenderTree::block(
                     "title2".to_string(),
-                    Box::new(RenderTree::Text("content".to_string()))
-                ))
+                    RenderTree::Text("content".to_string())
+                )
             ))
         );
     }
@@ -264,10 +350,7 @@ mod tests {
             create_stack_element(&exp),
             Ok(StackElement::new(
                 Constraint::Length(3),
-                RenderTree::Block(
-                    "title".to_string(),
-                    Box::new(RenderTree::Text("content".to_string()))
-                )
+                RenderTree::block("title".to_string(), RenderTree::Text("content".to_string()))
             ))
         );
     }
@@ -287,16 +370,16 @@ mod tests {
                 vec![
                     StackElement::new(
                         Constraint::Length(3),
-                        RenderTree::Block(
+                        RenderTree::block(
                             "title1".to_string(),
-                            Box::new(RenderTree::Text("content1".to_string()))
+                            RenderTree::Text("content1".to_string())
                         )
                     ),
                     StackElement::new(
                         Constraint::Length(3),
-                        RenderTree::Block(
+                        RenderTree::block(
                             "title2".to_string(),
-                            Box::new(RenderTree::Text("content2".to_string()))
+                            RenderTree::Text("content2".to_string())
                         )
                     )
                 ]
@@ -318,19 +401,19 @@ mod tests {
             create_render_layer(&exp),
             Ok(RenderLayer {
                 trees: vec![
-                    RenderTree::Block(
+                    RenderTree::block(
                         "title1".to_string(),
-                        Box::new(RenderTree::Text("content1".to_string()))
+                        RenderTree::Text("content1".to_string())
                     ),
                     RenderTree::Stack(
                         Direction::Horizontal,
                         vec![StackElement::new(
                             Constraint::Length(3),
-                            RenderTree::Block(
+                            RenderTree::block(
                                 "title2".to_string(),
-                                Box::new(RenderTree::Text("content2".to_string()))
+                                RenderTree::Text("content2".to_string())
                             )
-                        ),]
+                        )]
                     )
                 ]
             })
